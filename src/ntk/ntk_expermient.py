@@ -26,15 +26,17 @@ class MLP(nn.Module):
 
 
 def NTK(model, params, x, y):
-    @jax.jit
     def f(params, x):
         return model.apply(params, x)
 
-    J_x = jax.jit(jax.jacfwd(f, argnums=0))(params, x)
-    J_y = jax.jit(jax.jacfwd(f, argnums=0))(params, y)
+    J_x = jax.jacfwd(f, argnums=0)(params, x)
+    J_y = jax.jacfwd(f, argnums=0)(params, y)
     grad_x = jax.flatten_util.ravel_pytree(J_x)[0]
+    del J_x
     grad_y = jax.flatten_util.ravel_pytree(J_y)[0]
+    del J_y
     ntk = grad_x @ grad_y.T
+    del grad_x, grad_y
     return ntk
 
 
