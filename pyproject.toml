@@ -1,0 +1,27 @@
+[project]
+name = "ntk"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "speed1313", email = "speedtry13@icloud.com" }
+]
+dependencies = [
+    "matplotlib>=3.7.4",
+    "jax[cpu]>=0.4.13",
+    "flax>=0.7.2",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "ruff>=0.1.11",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
