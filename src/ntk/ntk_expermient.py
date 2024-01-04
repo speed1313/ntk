@@ -10,7 +10,7 @@ class MLP(nn.Module):
 
     def setup(self):
         self.dense1 = nn.Dense(features=self.width)
-        self.dense2 = nn.Dense(features=self.width
+        self.dense2 = nn.Dense(features=self.width)
         self.dense3 = nn.Dense(features=self.width)
         self.dense4 = nn.Dense(features=1)
 
