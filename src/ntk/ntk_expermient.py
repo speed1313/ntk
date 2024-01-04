@@ -26,11 +26,12 @@ class MLP(nn.Module):
 
 
 def NTK(model, params, x, y):
+    @jax.jit
     def f(params, x):
         return model.apply(params, x)
 
-    J_x = jax.jacfwd(f, argnums=0)(params, x)
-    J_y = jax.jacfwd(f, argnums=0)(params, y)
+    J_x = jax.jit(jax.jacfwd(f, argnums=0))(params, x)
+    J_y = jax.jit(jax.jacfwd(f, argnums=0))(params, y)
     grad_x = jax.flatten_util.ravel_pytree(J_x)[0]
     grad_y = jax.flatten_util.ravel_pytree(J_y)[0]
     ntk = grad_x @ grad_y.T
@@ -78,6 +79,7 @@ for width in [10, 100, 1000]:
     init_params = params
 
     ntk_init = NTK(model, params, x_train[0], x_train[1])
+    print("ntk_init: ", ntk_init)
 
     def loss_fn(params, x, y):
         y_pred = jax.vmap(model.apply, in_axes=(None, 0))(params, x)
@@ -97,7 +99,9 @@ for width in [10, 100, 1000]:
                 )
             ) / jnp.linalg.norm(jax.flatten_util.ravel_pytree(init_params)[0])
             params_norm_list.append(params_norm)
+        if i % 100 == 0:
             ntk = NTK(model, params, x_train[0], x_train[1])
+            print("ntk: ", ntk)
             ntk_list.append(jnp.linalg.norm(ntk - ntk_init))
 
     loss_dynamics_list.append(loss_dynamics)
@@ -143,6 +147,7 @@ plt.legend()
 plt.savefig(f"{dir}/function_approx_epoch_{args.epoch}.png")
 plt.show()
 
+epoch_list = [i * 100 for i in range(args.epoch // 100)]
 plt.plot(epoch_list, ntk_list_per_width[0], label="width=10")
 plt.plot(epoch_list, ntk_list_per_width[1], label="width=100")
 plt.plot(epoch_list, ntk_list_per_width[2], label="width=1000")
@@ -151,3 +156,4 @@ plt.ylabel("$\\frac{\|NTK(t) - NTK(0)\|}{\|NTK(0)\|}$")
 plt.title("$NTK(x_{train[0]}, x_{train[1]})$")
 plt.legend()
 plt.savefig(f"{dir}/ntk_epoch_{args.epoch}.png")
+plt.show()
