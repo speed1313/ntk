@@ -3,6 +3,10 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import jax
 import jax.flatten_util
+import argparse
+import datetime
+import os
+import csv
 
 
 class MLP(nn.Module):
@@ -30,17 +34,15 @@ def NTK(model, params, x, y):
         return model.apply(params, x)
 
     J_x = jax.jacrev(f, argnums=0)(params, x)
-    #J_y = jax.jacfwd(f, argnums=0)(params, y)
+    # J_y = jax.jacfwd(f, argnums=0)(params, y)
     grad_x = jax.flatten_util.ravel_pytree(J_x)[0]
-    #del J_x
-    #grad_y = jax.flatten_util.ravel_pytree(J_y)[0]
-    #del J_y
+    # del J_x
+    # grad_y = jax.flatten_util.ravel_pytree(J_y)[0]
+    # del J_y
     ntk = grad_x @ grad_x.T
-    #del grad_x, grad_y
+    # del grad_x, grad_y
     return ntk
 
-
-import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--width", type=int, default=1000)
@@ -55,20 +57,19 @@ mode = args.mode
 
 lr = args.lr
 
-import datetime
 
 now_time = datetime.datetime.now()
 dir = "images/" + now_time.strftime("%Y/%m/%d/%H%M%S")
-# os.mkdir(dir)
-import os
-
 os.makedirs(dir, exist_ok=True)
+
+# output config file
+with open(f"{dir}/config.csv", "w") as f:
+    writer = csv.writer(f)
+    writer.writerow(["lr", "mode", "epoch", "width"])
+    writer.writerow([lr, mode, args.epoch, args.width])
 
 
 loss_dynamics_list = []
-
-fig_loss = plt.figure()
-fig_params_norm = plt.figure()
 
 widths = [10, 100, 1000]
 num_width = len(widths)
@@ -79,10 +80,14 @@ param_list = []
 train_num = 5
 x_train = jnp.linspace(-3, 3, train_num)
 x_train = jnp.expand_dims(x_train, axis=-1)
+
+
 def true_fn(x):
-    #return (x ** 2) / 2 + x + 1
+    # return (x ** 2) / 2 + x + 1
     return jnp.sin(x)
-y_train =  jax.vmap(true_fn)(x_train).reshape(-1)
+
+
+y_train = jax.vmap(true_fn)(x_train).reshape(-1)
 
 x = jnp.linspace(-5, 5, 100)
 x = jnp.expand_dims(x, axis=-1)
@@ -98,7 +103,6 @@ for width in widths:
     params = model.init(key, x_train[0])
     init_params = params
 
-
     ntk_init = NTK(model, params, x_train[0], x_train[1])
     print("ntk_init: ", ntk_init)
 
@@ -108,7 +112,9 @@ for width in widths:
 
     for i in range(args.epoch):
         if mode == "full":
-            loss, grad = jax.value_and_grad(loss_fn, argnums=0)(params, x_train, y_train)
+            loss, grad = jax.value_and_grad(loss_fn, argnums=0)(
+                params, x_train, y_train
+            )
             params = jax.tree_util.tree_map(lambda p, g: p - lr * g, params, grad)
         elif mode == "sgd":
             key, subkey = jax.random.split(key)
