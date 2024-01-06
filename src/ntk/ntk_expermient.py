@@ -29,6 +29,7 @@ class MLP(nn.Module):
         return x
 
 
+"""
 def NTK(model, params, x, y):
     def f(params, x):
         return model.apply(params, x)
@@ -42,6 +43,23 @@ def NTK(model, params, x, y):
     ntk = grad_x @ grad_x.T
     # del grad_x, grad_y
     return ntk
+"""
+
+
+def split_into_batches_random(arr, batch_size, rng_key):
+    rng_key, subkey = jax.random.split(rng_key)
+    shuffled_indices = jax.random.permutation(subkey, jnp.arange(arr.shape[0]))
+
+    arr_shuffled = arr[shuffled_indices]
+    num_batches = arr.shape[0] // batch_size
+    batches = [
+        arr_shuffled[i * batch_size : (i + 1) * batch_size] for i in range(num_batches)
+    ]
+
+    if num_batches * batch_size < arr.shape[0]:
+        remaining_batch = arr_shuffled[num_batches * batch_size :]
+        batches.append(remaining_batch)
+    return batches
 
 
 parser = argparse.ArgumentParser()
@@ -49,11 +67,11 @@ parser.add_argument("--width", type=int, default=1000)
 parser.add_argument("--epoch", type=int, default=1000)
 parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--mode", type=str, default="sgd")
+parser.add_argument("--batch_size", type=int, default=2)
 args = parser.parse_args()
 
 mode = args.mode
-# mode = "full"
-# mode = "minibatch"
+batch_size = args.batch_size
 
 lr = args.lr
 
@@ -77,7 +95,7 @@ num_width = len(widths)
 norm_list = []
 loss_list = []
 param_list = []
-train_num = 5
+train_num = 10
 x_train = jnp.linspace(-3, 3, train_num)
 x_train = jnp.expand_dims(x_train, axis=-1)
 
@@ -103,13 +121,28 @@ for width in widths:
     params = model.init(key, x_train[0])
     init_params = params
 
-    ntk_init = NTK(model, params, x_train[0], x_train[1])
-    print("ntk_init: ", ntk_init)
-
+    @jax.jit
     def loss_fn(params, x, y):
         y_pred = jax.vmap(model.apply, in_axes=(None, 0))(params, x)
         return jnp.mean((y_pred.reshape(-1) - y) ** 2)
 
+    # this function is defined to benefit from jit.
+    # model's input shape is defined after mode.init
+    @jax.jit
+    def NTK(params, x, y):
+        J_x_fn = jax.jacrev(model.apply, argnums=0)
+        # J_y = jax.jacfwd(f, argnums=0)(params, y)
+        J_x = J_x_fn(params, x)
+        grad_x = jax.flatten_util.ravel_pytree(J_x)[0]
+        # del J_x
+        # grad_y = jax.flatten_util.ravel_pytree(J_y)[0]
+        # del J_y
+        ntk = grad_x @ grad_x.T
+        # del grad_x, grad_y
+        return ntk
+
+    ntk_init = NTK(params, x_train[0], x_train[1])
+    print("ntk_init: ", ntk_init)
     for i in range(args.epoch):
         if mode == "full":
             loss, grad = jax.value_and_grad(loss_fn, argnums=0)(
@@ -126,6 +159,19 @@ for width in widths:
                     params, batch_x, batch_y
                 )
                 params = jax.tree_util.tree_map(lambda p, g: p - lr * g, params, grad)
+        elif mode == "minibatch":
+            idxs = jnp.arange(len(x_train))
+            batches = split_into_batches_random(idxs, batch_size, key)
+
+            for batch in batches:
+                batch_x = x_train[batch]
+                batch_y = y_train[batch]
+                loss, grad = jax.value_and_grad(loss_fn, argnums=0)(
+                    params, batch_x, batch_y
+                )
+                params = jax.tree_util.tree_map(lambda p, g: p - lr * g, params, grad)
+        else:
+            raise ValueError("mode must be 'full', 'sgd' or 'minibatch'")
 
         if i % 5 == 0:
             loss = loss_fn(params, x_train, y_train)
@@ -139,7 +185,7 @@ for width in widths:
             ) / jnp.linalg.norm(jax.flatten_util.ravel_pytree(init_params)[0])
             params_norm_list.append(params_norm)
         if i % 5 == 0:
-            ntk = NTK(model, params, x_train[0], x_train[1])
+            ntk = NTK(params, x_train[0], x_train[1])
             ntk_list.append(jnp.linalg.norm(ntk - ntk_init) / jnp.linalg.norm(ntk_init))
 
     loss_dynamics_list.append(loss_dynamics)
