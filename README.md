@@ -9,7 +9,6 @@ The blog post about this experiment is [here](https://speed1313.github.io/posts/
 $ rye run python3 src/ntk/ntk_expermient.py --epoch 20000 --mode minibatch --batch_size 1 --depth 5 --lr 0.001
 ```
 
-- Batch = 1
 <table>
 <tr>
 <td><img src="./images/batch1/param_norm_epoch_20000.png"></td>
