@@ -9,6 +9,7 @@ import os
 import csv
 
 
+
 class MLP(nn.Module):
     width: int
     depth: int
